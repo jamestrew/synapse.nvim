@@ -6,15 +6,56 @@ Inspired by Hunk's two-way agent review workflow—not its diff viewer.
 
 ## Scope
 
-- Leave comments on lines or selected code for an external agent to read.
+- Leave comments on lines or selected code in current working files for an
+  external agent to read; historical revisions and deleted diff lines are outside
+  the initial scope.
 - Receive agent comments and exchange threaded replies beside the code.
-- Browse all comments, with filtering by human or agent authorship.
+- Follow Hunk's thread model initially: replies inherit the parent's anchor, and
+  there is no separate open/resolved discussion state.
+- Keep recorded file/line anchors fixed when code changes, as Hunk does. Following
+  edits or semantically reanchoring comments is deferred.
+- Follow Hunk's documented agent comment behavior, including deletion of human
+  or agent comments. Individual deletion rejects comments with replies; bulk
+  clearing must not leave dangling replies.
+- Browse conversations with one entry per thread and filtering by human or agent
+  authorship. The intended default browser is a quickfix list.
+- Use Neovim's `vim.diagnostic` UI for thread location indicators, respecting
+  users' diagnostic configuration. Render indicators without registering stored
+  diagnostics: threads do not enter ordinary diagnostic counts, navigation,
+  floats, or diagnostic quickfix lists. Start with a floating window for reading
+  threads; the thread presentation may change later.
+- Compose comments and replies in a separate editable floating buffer, using
+  normal Neovim editing and explicit submit/cancel actions. The thread transcript
+  itself is read-only.
 - Explicitly ask the agent to read or address comments; saving a comment does not
   invoke or notify an agent.
+- Agent interaction requires a running Neovim instance and uses a documented
+  agent-facing interface, guided by an agent skill. No separate daemon or
+  additional executable is required.
+- Sessions use a stable project root, with Git worktree root discovery where
+  available, rather than following changes to the editor's working directory.
+  Instances in the same project have independent sessions. A sole matching
+  session can be targeted automatically; multiple matches require explicit
+  selection, never broadcast writes.
+- Discover live sessions through one small local file per instance, advertising
+  its project root, session ID, and Neovim socket address. Remove the file on
+  clean shutdown and ignore unreachable instances during discovery. Discovery
+  files are separate from saved conversations.
+- Save sessions locally so conversations survive editor restarts. Sessions are
+  saved automatically after submitted changes, including replies and deletions;
+  unsubmitted drafts are not saved initially. Sessions are not automatically
+  committed, shared, or synchronized elsewhere.
+- Expose explicit session resumption through the plugin interface; do not resume
+  saved sessions automatically. Users may wire resumption to their own
+  autocommands or keybindings.
 - Work alongside existing Git and diff plugins without replacing them.
 
-Comment presentation, persistence, anchoring across edits, the all-comments view,
-and the agent-facing interface are still to be designed.
+Whether a comment calls for discussion, code changes, or another action is up to
+the human and agent, not prescribed by the plugin.
+
+Diagnostic integration details, the all-comments view, saved-session selection,
+storage locations and formats, and the details of the agent-facing interface are
+still to be designed.
 
 ## Status
 
