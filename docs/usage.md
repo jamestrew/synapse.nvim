@@ -27,7 +27,8 @@ directories. There are no runtime plugin dependencies. Git is optional.
   software flow control for Ctrl-S to reach Neovim.
 - `:SynapseBrowse [human|agent]` opens quickfix, one entry per thread. An authorship
   filter matches **any** participant and retains the whole thread. **Enter** jumps
-  to the recorded location and opens its read-only transcript.
+  to the recorded location and opens its read-only transcript. After resuming a
+  saved session, reopen the browser: stale lists reject Enter before navigation.
 - `:SynapseThread {comment-id}` reads that comment's entire thread. Move to a
   comment and press **r** to reply or **e** to edit a human comment. **q** closes.
 - `:SynapseReply {comment-id}` and `:SynapseEdit {human-comment-id}` compose directly.
