@@ -158,11 +158,11 @@ function M.browse(author)
       user_data = { synapse_thread_id = thread.id },
     }
   end
-  vim.fn.setqflist(
-    {},
-    ' ',
-    { title = 'Synapse threads', context = { synapse = true }, items = items }
-  )
+  vim.fn.setqflist({}, ' ', {
+    title = 'Synapse threads',
+    context = { synapse = true, generation = session.info().generation },
+    items = items,
+  })
   vim.cmd.copen()
   local buf = api.nvim_get_current_buf()
   local previous = vim.fn.maparg('<CR>', 'n', false, true)
@@ -178,6 +178,10 @@ function M.browse(author)
       end
       quickfix_maps[buf] = nil
       api.nvim_feedkeys(vim.keycode('<CR>'), 'm', false)
+      return
+    end
+    if list.context.generation ~= session.info().generation then
+      vim.notify('synapse: conversation was resumed; run :SynapseBrowse again', vim.log.levels.WARN)
       return
     end
     local item = list.items[list.idx]

@@ -225,6 +225,54 @@ t.describe('human conversation UI', function()
       n.exec_lua([[return { vim.g.other_quickfix_enter, vim.api.nvim_win_get_cursor(0)[1] }]])
     )
   end)
+  t.it(
+    'rejects stale browser entries before navigating and accepts a fresh list after resumption',
+    function()
+      local saved = n.exec_lua(function()
+        local s = require('synapse')
+        s.comment({ file = 'code.lua', line = 1, body = 'imported conversation' })
+        return s.info().session_id
+      end)
+      n.clear()
+      local code_win = n.exec_lua(function(root, id)
+        local s = require('synapse')
+        s.setup({ root = root, discovery_dir = root .. '/live', storage_dir = root .. '/saved' })
+        vim.cmd.edit(root .. '/code.lua')
+        local win = vim.api.nvim_get_current_win()
+        s.comment({ file = 'code.lua', line = 3, body = 'destination conversation' })
+        s.browse('human')
+        s.resume(id, { confirm = true })
+        return win
+      end, project, saved)
+      n.feed('<CR>')
+      t.eq(
+        { 'quickfix', 1, 0 },
+        n.exec_lua(function(win)
+          local floats = 0
+          for _, window in ipairs(vim.api.nvim_list_wins()) do
+            if vim.fn.win_gettype(window) == 'popup' then
+              floats = floats + 1
+            end
+          end
+          return { vim.bo.buftype, vim.api.nvim_win_get_cursor(win)[1], floats }
+        end, code_win)
+      )
+      t.matches('SynapseBrowse', n.exec_lua([[return vim.fn.execute('messages')]]))
+      n.command('SynapseBrowse human')
+      n.feed('<CR>')
+      t.eq(
+        { false, 1, true },
+        n.exec_lua(function(win)
+          local transcript = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n')
+          return {
+            vim.bo.modifiable,
+            vim.api.nvim_win_get_cursor(win)[1],
+            transcript:find('imported conversation', 1, true) ~= nil,
+          }
+        end, code_win)
+      )
+    end
+  )
   for _, action in ipairs({ 'edit', 'reply' }) do
     t.it('retains but rejects a stale ' .. action .. ' draft after resumption', function()
       local saved = n.exec_lua(function()
