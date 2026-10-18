@@ -17,6 +17,15 @@ idempotent: it does not switch projects, reset comments, or resume history.
 Storage/discovery overrides are canonicalized at setup and must be different
 directories. There are no runtime plugin dependencies. Git is optional.
 
+Neovim loads `plugin/synapse.lua` to register commands and the first-change
+listener without loading Lua modules or calling `setup()`. Requiring `synapse`
+only defines the public API. Explicit setup publishes the live session immediately
+(including project-root discovery and writing its advertisement), so agents can
+connect before any UI is opened. Commands require setup to have run first.
+The UI loads on first browse, composition, or thread view; markers load on the
+first conversation change or explicit `refresh()`. Empty-session startup does
+not scan buffers or attach marker listeners. Supplying `root` skips Git discovery.
+
 ## Human workflow
 
 - `:SynapseComment` composes a comment at the cursor. A visual selection or

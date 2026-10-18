@@ -17,4 +17,7 @@ local n = require('test.functional.testnvim')()
 vim.list_extend(n.nvim_argv, {
   '--cmd',
   ('lua vim.opt.rtp:prepend(%q)'):format(root),
+  -- The harness uses -u NONE, which disables automatic plugin loading.
+  '--cmd',
+  'runtime plugin/synapse.lua',
 })

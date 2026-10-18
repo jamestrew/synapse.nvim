@@ -25,7 +25,10 @@ t.describe('human conversation UI', function()
 
   t.it('composes multiline range comments and reads a separate, read-only transcript', function()
     local screen = Screen.new(80, 24)
+    t.eq(false, n.exec_lua([[return package.loaded['synapse.ui'] ~= nil]]))
     n.command('2,3SynapseComment')
+    t.eq(true, n.exec_lua([[return package.loaded['synapse.ui'] ~= nil]]))
+    t.eq(false, n.exec_lua([[return package.loaded['synapse.markers'] ~= nil]]))
     n.api.nvim_buf_set_lines(0, 0, -1, false, { 'Why this block?', 'Second line.' })
     screen:expect({ any = 'Why this block%?' })
     n.feed('<C-s>')
@@ -45,6 +48,31 @@ t.describe('human conversation UI', function()
     n.feed('<C-s>')
     screen:expect({ any = 'A reply' })
     t.eq(2, n.exec_lua([[return #assert(require('synapse').threads()[1]).comments]]))
+  end)
+
+  t.it('loads markers for the first agent comment without loading the UI', function()
+    local screen = Screen.new(80, 16)
+    n.exec_lua(function()
+      local s = require('synapse')
+      s.setup({ diagnostics = { signs = false, virtual_text = true } })
+      require('synapse.agent').dispatch({
+        session_id = s.info().session_id,
+        op = 'comment',
+        args = { file = 'code.lua', line = 2, body = 'first agent comment' },
+      })
+    end)
+    screen:expect({ any = 'first agent comment' })
+    t.eq(
+      { false, true, false },
+      n.exec_lua(function()
+        local namespace = vim.api.nvim_get_namespaces().synapse
+        return {
+          package.loaded['synapse.ui'] ~= nil,
+          package.loaded['synapse.markers'] ~= nil,
+          assert(vim.diagnostic.config(nil, namespace)).signs,
+        }
+      end)
+    )
   end)
 
   t.it('cancels drafts without publishing or saving them', function()
