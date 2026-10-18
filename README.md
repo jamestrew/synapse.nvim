@@ -4,6 +4,8 @@ Code-anchored conversations between you and your coding agent, inside Neovim.
 
 Inspired by Hunk's two-way agent review workflow—not its diff viewer.
 
+[Usage and Lua interface](docs/usage.md) · [Agent skill](skills/synapse/SKILL.md)
+
 ## Scope
 
 - Leave comments on lines or selected code in current working files for an
