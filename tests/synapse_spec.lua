@@ -110,6 +110,7 @@ t.describe('synapse.nvim bootstrap', function()
         s.setup({ diagnostics = { signs = false } })
         s.setup({ diagnostics = { virtual_text = false } })
         s.setup()
+        ---@diagnostic disable-next-line: param-type-mismatch -- Exercise runtime validation.
         assert(not pcall(s.setup, { diagnostics = 'invalid' }))
         s.refresh()
         local namespace = vim.api.nvim_get_namespaces().synapse

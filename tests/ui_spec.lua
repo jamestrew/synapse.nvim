@@ -87,6 +87,23 @@ t.describe('human conversation UI', function()
       end)
     )
   end)
+  t.it('supports omitted composition options and prefills edits with the existing body', function()
+    t.eq(
+      { 'original', 'second line' },
+      n.exec_lua(function()
+        local s = require('synapse')
+        local draft = s.compose()
+        assert(vim.deep_equal({ '' }, vim.api.nvim_buf_get_lines(draft.bufnr, 0, -1, false)))
+        vim.api.nvim_buf_delete(draft.bufnr, { force = true })
+        local c = s.comment({ file = 'code.lua', line = 1, body = 'original\nsecond line' })
+        local edit = s.compose({ id = c.id })
+        return vim.api.nvim_buf_get_lines(edit.bufnr, 0, -1, false)
+      end)
+    )
+    n.api.nvim_buf_set_lines(0, 0, -1, false, { 'revised' })
+    n.feed('<C-s>')
+    t.eq('revised', n.exec_lua([[return assert(require('synapse').threads()[1]).comments[1].body]]))
+  end)
   t.it(
     'browses whole threads once, filters by any participant, and navigates to recorded code',
     function()

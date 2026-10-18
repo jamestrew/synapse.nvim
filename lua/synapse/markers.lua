@@ -2,8 +2,13 @@ local M = {}
 local api = vim.api
 local session = require('synapse.session')
 local namespace = api.nvim_create_namespace('synapse')
-local attached, pending = {}, {}
+---@type table<integer, boolean>
+local attached = {}
+---@type table<integer, boolean>
+local pending = {}
 
+---@param buf integer
+---@return nil
 local function render(buf)
   if not api.nvim_buf_is_valid(buf) or not api.nvim_buf_is_loaded(buf) then
     return
@@ -16,6 +21,7 @@ local function render(buf)
   name = vim.uv.fs_realpath(name) or vim.fs.normalize(name)
   local info = session.info()
   local count = api.nvim_buf_line_count(buf)
+  ---@type vim.Diagnostic[]
   local diagnostics = {}
   for _, thread in ipairs(session.threads()) do
     local a = thread.anchor
@@ -56,12 +62,15 @@ local function render(buf)
   end
 end
 
+---@return nil
 function M.refresh()
   for _, buf in ipairs(api.nvim_list_bufs()) do
     render(buf)
   end
 end
 
+---@param opts? vim.diagnostic.Opts
+---@return nil
 function M.setup(opts)
   if opts then
     vim.diagnostic.config(opts, namespace)

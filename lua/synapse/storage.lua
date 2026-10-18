@@ -1,10 +1,14 @@
 local M = {}
 
+---@param path string
+---@return any Decoded JSON; callers validate its shape at the trust boundary.
 function M.read(path)
   return vim.json.decode(table.concat(vim.fn.readfile(path), '\n'))
 end
 
 ---Enumerate literal directories, including names containing glob metacharacters.
+---@param directory string
+---@return string[]
 function M.files(directory)
   local paths = {}
   if vim.fn.isdirectory(directory) == 0 then
@@ -20,6 +24,9 @@ function M.files(directory)
 end
 
 ---Replace one snapshot atomically; failures leave the previous snapshot intact.
+---@param path string
+---@param value any JSON-serializable data.
+---@return nil
 function M.write(path, value)
   local temporary = path .. '.' .. vim.fn.getpid() .. '.' .. tostring(vim.uv.hrtime()) .. '.tmp'
   ---@type integer?

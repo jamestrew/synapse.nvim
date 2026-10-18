@@ -1,8 +1,26 @@
 local M = {}
 local session = require('synapse.session')
 
+---@class synapse.DiscoverOpts
+---@field project_root string
+---@field discovery_dir? string
+---@field session_id? string
+---@field timeout_ms? integer
+
+---@class synapse.LiveSession
+---@field session_id string
+---@field project_root string
+---@field socket string
+
+---@alias synapse.Operation 'threads'|'delete'|'clear'|'comment'
+
+---@class synapse.AgentRequest : synapse.DiscoverOpts
+---@field op synapse.Operation
+---@field args? table Operation-specific arguments, validated by dispatch/session.
+
 ---Supported live operations; Neovim RPC itself is trusted, not sandboxed.
----@return any
+---@param request table Untrusted RPC payload; validate before dispatch.
+---@return any The selected operation determines the response shape.
 function M.dispatch(request)
   assert(type(request) == 'table', 'synapse: request must be a table')
   assert(request.session_id == session.info().session_id, 'synapse: session identity mismatch')
@@ -24,10 +42,16 @@ function M.dispatch(request)
   error('synapse: unsupported agent operation: ' .. tostring(request.op))
 end
 
+---@param socket string
+---@return integer
 local function connect(socket)
   return vim.fn.sockconnect(socket:match('^.+:%d+$') and 'tcp' or 'pipe', socket, { rpc = true })
 end
 
+---@param socket string
+---@param code string
+---@param args table
+---@return any RPC response; the operation determines its shape.
 local function remote(socket, code, args)
   local channel = connect(socket)
   assert(channel > 0, 'synapse: cannot connect to session')
@@ -39,6 +63,9 @@ local function remote(socket, code, args)
   return result
 end
 
+---@param socket string
+---@param timeout integer
+---@return any Untrusted probe response; discover checks its identity.
 local function probe(socket, timeout)
   -- rpcrequest blocks scheduled timers; bound a native remote-expr client instead.
   local result = vim
@@ -60,6 +87,8 @@ local function probe(socket, timeout)
 end
 
 ---Probe advertisements rather than trusting leftover files after a crash.
+---@param opts synapse.DiscoverOpts
+---@return synapse.LiveSession[]
 function M.discover(opts)
   opts = opts or {}
   assert(type(opts.project_root) == 'string', 'synapse: project_root is required')
@@ -90,12 +119,14 @@ function M.discover(opts)
 end
 
 ---Run from a separate Neovim process. Select exactly one live session, never broadcast.
+---@param opts synapse.AgentRequest
+---@return any The selected operation determines the RPC response shape.
 function M.request(opts)
   assert(type(opts) == 'table', 'synapse: request must be a table')
   local matches = M.discover(opts)
   assert(#matches > 0, 'synapse: no matching live session')
   assert(#matches == 1, 'synapse: ambiguous project; select an explicit session_id')
-  local target = assert(matches[1])
+  local target = matches[1]
   return remote(target.socket, "return require('synapse.agent').dispatch(...)", {
     {
       session_id = target.session_id,
