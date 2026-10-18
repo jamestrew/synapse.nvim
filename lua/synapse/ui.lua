@@ -2,10 +2,26 @@ local M = {}
 local session = require('synapse.session')
 local api = vim.api
 local initialized = false
+---@type table<integer, fun()>
 local quickfix_maps = {}
----@type { bufnr: integer, winid: integer, close: fun(), id: string, rows: string[] }?
+---@class synapse.Window
+---@field bufnr integer
+---@field winid integer
+
+---@class synapse.Panel : synapse.Window
+---@field close fun()
+
+---@class synapse.ThreadView : synapse.Panel
+---@field id string
+---@field rows string[]
+
+---@type synapse.ThreadView?
 local view
 
+---@param title string
+---@param lines string[]
+---@param editable boolean
+---@return synapse.Panel
 local function float(title, lines, editable)
   local buf = api.nvim_create_buf(false, true)
   vim.bo[buf].bufhidden = 'wipe'
@@ -35,6 +51,7 @@ local function float(title, lines, editable)
   return { bufnr = buf, winid = win, close = close }
 end
 
+---@param id string
 ---@return synapse.Comment, synapse.Thread
 local function comment(id)
   for _, thread in ipairs(session.threads()) do
@@ -47,6 +64,7 @@ local function comment(id)
   error('synapse: unknown comment: ' .. tostring(id))
 end
 
+---@return nil
 local function refresh_view()
   if not view or not api.nvim_buf_is_valid(view.bufnr) then
     return
@@ -77,14 +95,14 @@ local function refresh_view()
 end
 
 ---Compose a human comment, reply (parent_id), or edit (id). Drafts are not persisted.
-function M.compose(opts)
+---@param options? synapse.ComposeOpts
+---@return synapse.Window
+function M.compose(options)
   local generation = session.info().generation
-  opts = vim.deepcopy(opts or {})
-  local lines = { '' }
-  if opts.id then
-    local c = comment(opts.id)
-    assert(c.author == 'human', 'synapse: only human comments can be edited')
-    lines = vim.split(c.body, '\n', { plain = true })
+  local opts = vim.deepcopy(options or {})
+  local existing = opts.id and comment(opts.id)
+  if existing then
+    assert(existing.author == 'human', 'synapse: only human comments can be edited')
   elseif not opts.parent_id then
     opts.file = opts.file or api.nvim_buf_get_name(0)
     opts.line = opts.line or api.nvim_win_get_cursor(0)[1]
@@ -92,6 +110,7 @@ function M.compose(opts)
   else
     comment(opts.parent_id)
   end
+  local lines = existing and vim.split(existing.body, '\n', { plain = true }) or { '' }
   local draft = float(' Synapse compose: Ctrl-S submit / q cancel ', lines, true)
   vim.keymap.set({ 'n', 'i' }, '<C-s>', function()
     local body = table.concat(api.nvim_buf_get_lines(draft.bufnr, 0, -1, false), '\n')
@@ -103,8 +122,8 @@ function M.compose(opts)
       if opts.id then
         session.edit(opts.id, body)
       else
-        opts.body = body
-        session.comment(opts, 'human')
+        local args = vim.tbl_extend('force', opts, { body = body }) --[[@as synapse.CommentInput]]
+        session.comment(args, 'human')
       end
     end)
     if ok then
@@ -118,6 +137,8 @@ function M.compose(opts)
 end
 
 ---Read the whole thread containing a comment; actions apply to the comment under the cursor.
+---@param id string
+---@return synapse.Window
 function M.view(id)
   local _, thread = comment(id)
   if view then
@@ -140,7 +161,10 @@ function M.view(id)
 end
 
 ---Quickfix contains one entry per thread, even when a reply matches the author filter.
+---@param author? synapse.Author
+---@return vim.quickfix.entry[]
 function M.browse(author)
+  ---@type vim.quickfix.entry[]
   local items = {}
   for _, thread in ipairs(session.threads(author)) do
     local a = thread.anchor
@@ -200,6 +224,7 @@ function M.browse(author)
   return items
 end
 
+---@return nil
 function M.setup()
   if initialized then
     return

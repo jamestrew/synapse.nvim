@@ -1,6 +1,8 @@
 local M = {}
 local storage = require('synapse.storage')
 
+---@alias synapse.Author 'human'|'agent'
+
 ---@class synapse.Anchor
 ---@field file string Relative to the stable project root.
 ---@field line integer 1-based, inclusive.
@@ -8,7 +10,7 @@ local storage = require('synapse.storage')
 
 ---@class synapse.Comment
 ---@field id string
----@field author 'human'|'agent'
+---@field author synapse.Author
 ---@field body string
 ---@field anchor synapse.Anchor
 ---@field parent_id? string
@@ -25,29 +27,79 @@ local storage = require('synapse.storage')
 ---@field next_id integer
 ---@field comments synapse.Comment[]
 
+---@class synapse.SetupOpts
+---@field root? string
+---@field discovery_dir? string
+---@field storage_dir? string
+---@field diagnostics? vim.diagnostic.Opts
+
+---@class synapse.Info
+---@field session_id string
+---@field generation integer
+---@field project_root string
+---@field socket string
+---@field discovery_dir string
+---@field storage_dir string
+
+---@class synapse.CommentInput
+---@field body string
+---@field file? string
+---@field line? integer
+---@field end_line? integer
+---@field parent_id? string
+
+---@class synapse.ComposeOpts
+---@field file? string
+---@field line? integer
+---@field end_line? integer
+---@field parent_id? string
+---@field id? string
+
+---@class synapse.ClearOpts
+---@field confirm boolean
+---@field include_human? boolean
+
+---@class synapse.ResumeOpts
+---@field confirm? boolean
+
+---@class synapse.SavedSession
+---@field session_id string
+---@field project_root string
+---@field comment_count integer
+
 ---@type synapse.State?
 local state
 local generation = 0
-local config = {}
+---@type { discovery_dir: string, storage_dir: string, socket?: string }
+local config
 
+---@return synapse.State
 local function current()
   assert(state, 'synapse: call setup() first')
   return state
 end
 
+---@param value any
+---@return boolean
 local function nonblank(value)
   return type(value) == 'string' and value:find('%S') ~= nil
 end
 
+---@param value any
+---@return boolean
 local function integer(value)
   return type(value) == 'number' and value >= 1 and value % 1 == 0
 end
 
+---@param path string
+---@return string
 local function canonical(path)
   return vim.uv.fs_realpath(path)
     or vim.fs.normalize(vim.fn.resolve(vim.fn.fnamemodify(path, ':p'))):gsub('/$', '')
 end
 
+---@param opts? synapse.SetupOpts
+---@return synapse.Info
 function M.setup(opts)
   if state then
     return M.info()
@@ -107,21 +159,24 @@ function M.setup(opts)
   return M.info()
 end
 
+---@return synapse.Info
 function M.info()
   local s = current()
   return {
     session_id = s.session_id,
     generation = generation,
     project_root = s.project_root,
-    socket = config.socket,
+    socket = assert(config.socket),
     discovery_dir = config.discovery_dir,
     storage_dir = config.storage_dir,
   }
 end
 
+---@param args synapse.CommentInput
+---@return synapse.Anchor
 local function anchor(args)
   local s = current()
-  assert(nonblank(args.file), 'synapse: file is required')
+  assert(type(args.file) == 'string' and nonblank(args.file), 'synapse: file is required')
   local absolute = canonical(vim.fs.joinpath(s.project_root, args.file))
   if args.file:sub(1, 1) == '/' then
     absolute = canonical(args.file)
@@ -139,12 +194,20 @@ local function anchor(args)
   end
   local last = args.end_line or args.line
   assert(
-    integer(args.line) and integer(last) and last >= args.line and last <= count,
+    type(args.line) == 'number'
+      and integer(args.line)
+      and type(last) == 'number'
+      and integer(last)
+      and last >= args.line
+      and last <= count,
     'synapse: invalid line range'
   )
   return { file = absolute:sub(#prefix + 1), line = args.line, end_line = last }
 end
 
+---@param s synapse.State
+---@param id string
+---@return synapse.Comment
 local function find(s, id)
   for _, c in ipairs(s.comments) do
     if c.id == id then
@@ -154,6 +217,9 @@ local function find(s, id)
   error('synapse: unknown comment: ' .. tostring(id))
 end
 
+---@param next_state synapse.State
+---@param resumed? boolean
+---@return nil
 local function commit(next_state, resumed)
   storage.write(config.storage_dir .. '/' .. next_state.session_id .. '.json', next_state)
   state = next_state
@@ -167,6 +233,9 @@ local function commit(next_state, resumed)
   end
 end
 
+---@param args synapse.CommentInput
+---@param author synapse.Author
+---@return synapse.Comment
 function M.comment(args, author)
   assert(type(args) == 'table', 'synapse: comment arguments must be a table')
   for key in pairs(args) do
@@ -176,6 +245,7 @@ function M.comment(args, author)
     )
   end
   assert(nonblank(args.body), 'synapse: comment body must not be blank')
+  ---@diagnostic disable-next-line: unnecessary-assert -- Keep validation for untyped/RPC callers.
   assert(author == 'human' or author == 'agent', 'synapse: invalid author')
   local s = vim.deepcopy(current())
   ---@type synapse.Anchor
@@ -202,6 +272,9 @@ function M.comment(args, author)
   return vim.deepcopy(c)
 end
 
+---@param id string
+---@param body string
+---@return synapse.Comment
 function M.edit(id, body)
   assert(nonblank(body), 'synapse: comment body must not be blank')
   local s = vim.deepcopy(current())
@@ -212,6 +285,8 @@ function M.edit(id, body)
   return vim.deepcopy(c)
 end
 
+---@param id string
+---@return true
 function M.delete(id)
   local s = vim.deepcopy(current())
   find(s, id)
@@ -225,10 +300,13 @@ function M.delete(id)
   return true
 end
 
+---@param opts synapse.ClearOpts
+---@return integer
 function M.clear(opts)
   opts = opts or {}
   assert(type(opts) == 'table', 'synapse: clear options must be a table')
   for key in pairs(opts) do
+    ---@diagnostic disable-next-line: unnecessary-assert -- Keep validation for untyped/RPC callers.
     assert(
       key == 'confirm' or key == 'include_human',
       'synapse: unknown clear option: ' .. tostring(key)
@@ -258,6 +336,8 @@ function M.clear(opts)
   return before - #s.comments
 end
 
+---@param id string
+---@return string
 local function saved_path(id)
   assert(
     type(id) == 'string' and id:match('^[a-f0-9]+$') and #id == 24,
@@ -266,6 +346,9 @@ local function saved_path(id)
   return config.storage_dir .. '/' .. id .. '.json'
 end
 
+---@param s any Decoded JSON; validate before accepting it as session state.
+---@param id string
+---@return synapse.State
 local function validate_saved(s, id)
   assert(
     type(s) == 'table' and s.version == 1 and s.session_id == id,
@@ -315,6 +398,7 @@ local function validate_saved(s, id)
   return s
 end
 
+---@return synapse.SavedSession[]
 function M.saved_sessions()
   current()
   local result = {}
@@ -332,6 +416,9 @@ function M.saved_sessions()
 end
 
 ---Resume a snapshot as an independent copy, never as a second writer to its identity.
+---@param id string
+---@param opts? synapse.ResumeOpts
+---@return synapse.Info
 function M.resume(id, opts)
   local s = current()
   assert(
@@ -344,8 +431,10 @@ function M.resume(id, opts)
   return M.info()
 end
 
+---@param author? synapse.Author
 ---@return synapse.Thread[]
 function M.threads(author)
+  ---@diagnostic disable-next-line: unnecessary-assert -- Keep validation for untyped/RPC callers.
   assert(author == nil or author == 'human' or author == 'agent', 'synapse: invalid author filter')
   ---@type synapse.Thread[]
   local threads = {}

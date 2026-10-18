@@ -40,7 +40,9 @@ vim.api.nvim_create_user_command('SynapseComment', function(args)
 end, { range = true })
 
 vim.api.nvim_create_user_command('SynapseBrowse', function(args)
-  require('synapse').browse(args.args ~= '' and args.args or nil)
+  local author = args.args ~= '' and args.args or nil
+  assert(author == nil or author == 'human' or author == 'agent', 'synapse: invalid author filter')
+  require('synapse').browse(author)
 end, {
   nargs = '?',
   complete = function()

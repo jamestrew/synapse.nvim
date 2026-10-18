@@ -26,6 +26,7 @@ format-check:
 
 typecheck: check-deps
 	"$(EMMYLUA_CHECK)" . --severity warn --warnings-as-errors
+	@sh tests/typecheck.sh "$(EMMYLUA_CHECK)"
 
 test: check-deps
 	@set -eu; \

@@ -96,6 +96,13 @@ make test                          # Neovim functional tests
 make check                         # all checks (also the default make target)
 ```
 
+Plugin APIs and session data use EmmyLua `---@class`, `---@param`, and
+`---@return` annotations. `emmylua_check` does check types, but unannotated
+parameters can leave mistakes unchecked. `make typecheck` also runs positive
+and negative probes against the public API, ensuring argument, assignment, and
+return-type mistakes really fail rather than silently resolving Synapse as `any`.
+Runtime validation remains in place for JSON, RPC, and untyped Lua callers.
+
 ### Tests
 
 Tests use Neovim's private `test/runner.lua`, RPC helpers, and `Screen:expect()`.
