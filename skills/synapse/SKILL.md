@@ -1,6 +1,7 @@
 ---
 name: synapse
 description: Read or respond to code-anchored human–agent conversations in a running Neovim Synapse session. Use when asked to inspect comments, reply to a thread, leave code observations, or delete or clear conversation comments.
+disable-model-invocation: true
 ---
 
 # Synapse conversations
