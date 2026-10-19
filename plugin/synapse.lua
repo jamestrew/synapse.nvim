@@ -51,8 +51,10 @@ end, {
 })
 
 vim.api.nvim_create_user_command('SynapseThread', function(args)
-  require('synapse').view(args.args)
-end, { nargs = 1 })
+  require('synapse').view(
+    args.args ~= '' and args.args or { line = args.line1, end_line = args.line2 }
+  )
+end, { nargs = '?', range = true })
 
 vim.api.nvim_create_user_command('SynapseReply', function(args)
   require('synapse').compose({ parent_id = args.args })
