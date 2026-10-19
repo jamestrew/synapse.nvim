@@ -24,8 +24,8 @@ Inspired by Hunk's two-way agent review workflow—not its diff viewer.
 - Use Neovim's `vim.diagnostic` UI for thread location indicators, respecting
   users' diagnostic configuration. Render indicators without registering stored
   diagnostics: threads do not enter ordinary diagnostic counts, navigation,
-  floats, or diagnostic quickfix lists. Start with a floating window for reading
-  threads; the thread presentation may change later.
+  floats, or diagnostic quickfix lists. Read threads in floating outline/detail panes,
+  with replies and edits docked below the selected comment.
 - Compose comments and replies in a separate editable floating buffer, using
   normal Neovim editing and explicit submit/cancel actions. The thread transcript
   itself is read-only.
@@ -55,13 +55,13 @@ Inspired by Hunk's two-way agent review workflow—not its diff viewer.
 Whether a comment calls for discussion, code changes, or another action is up to
 the human and agent, not prescribed by the plugin.
 
-Diagnostic integration details, the all-comments view, saved-session selection,
-storage locations and formats, and the details of the agent-facing interface are
-still to be designed.
+The [usage guide](docs/usage.md) documents diagnostic display, quickfix browsing,
+saved-session selection, storage, and the agent-facing interface.
 
 ## Status
 
-Bootstrap only. The Lua entry point loads, but no review features are implemented.
+Session-backed comments, threaded replies, agent RPC, saved-session resumption,
+and the outline/detail UI are implemented. See the [usage guide](docs/usage.md).
 
 To load the local checkout:
 

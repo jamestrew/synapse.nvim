@@ -30,16 +30,38 @@ not scan buffers or attach marker listeners. Supplying `root` skips Git discover
 
 - `:SynapseComment` composes a comment at the cursor. A visual selection or
   `:2,5SynapseComment` records an inclusive line range.
-- Composition opens a separate editable Markdown float in normal mode. Use
-  ordinary editing (`i`, `o`, etc.). **Ctrl-S** submits in normal or insert mode;
-  **q** in normal mode or **Ctrl-C** cancels. A terminal may require disabling
-  software flow control for Ctrl-S to reach Neovim.
+- Composition opens an editable Markdown buffer in normal mode. Use ordinary
+  editing (`i`, `o`, etc.). **Ctrl-S** submits in normal or insert mode; **q** in
+  normal mode or **Ctrl-C** cancels. A terminal may require disabling software
+  flow control for Ctrl-S to reach Neovim. New comments open a standalone float;
+  replies and edits dock below the selected comment's detail pane, without
+  covering the outline or reading area. Sending or cancelling restores its size
+  and returns to the originating pane. One draft is open at a time; composing
+  again resumes it rather than replacing its text or target. Use **Ctrl-W p** to
+  revisit context and **r** in either reading pane to return to the draft.
 - `:SynapseBrowse [human|agent]` opens quickfix, one entry per thread. An authorship
   filter matches **any** participant and retains the whole thread. **Enter** jumps
-  to the recorded location and opens its read-only transcript. After resuming a
-  saved session, reopen the browser: stale lists reject Enter before navigation.
-- `:SynapseThread {comment-id}` reads that comment's entire thread. Move to a
-  comment and press **r** to reply or **e** to edit a human comment. **q** closes.
+  to the recorded location and opens the thread. After resuming a saved session,
+  reopen the browser: stale lists reject Enter before navigation.
+- `:SynapseThread` reads the thread at the cursor. A visual selection or
+  `:2,5SynapseThread` finds threads overlapping that inclusive range in the current
+  buffer. Multiple matches open a picker; no matches show a notification.
+  `:SynapseThread {comment-id}` opens the thread with that exact comment selected.
+  The reply outline is on the left and a read-only Markdown detail buffer on the
+  right. Author labels, branch connectors, and an ancestry breadcrumb distinguish
+  replies; the detail pane does not quote the parent's body.
+  - **Tab / Shift-Tab** swaps panes without resetting the reading position.
+  - In the **outline**, **j/k** selects comments, **p** selects the parent, and
+    **za** folds/expands a branch.
+  - In **detail**, normal Neovim motions remain available: **j/k**, **gg/G**,
+    **Ctrl-D/U**, etc. They never change the selected comment.
+  - In **either pane**, **]c / [c** selects the next/previous visible comment,
+    **[p** selects the parent, **r** replies, **e** edits a human comment, and
+    **q / Ctrl-C** closes the thread view.
+  Thread views need at least **60 columns × 16 rows**. Resizing keeps the existing
+  buffers and draft text. Live updates retain selection, folds, and reading
+  position. If a pane is closed or its thread disappears, any open draft is kept
+  in a standalone float; missing reply targets still reject submission.
 - `:SynapseReply {comment-id}` and `:SynapseEdit {human-comment-id}` compose directly.
 - `:SynapseDelete {comment-id}` removes one comment if it has no replies.
 - `:SynapseClear` asks before removing agent comments. `:SynapseClear!` asks before
@@ -49,6 +71,12 @@ not scan buffers or attach marker listeners. Supplying `root` skips Git discover
 Saving never starts or notifies an agent. Explicitly ask your agent to use the
 [Synapse skill](../skills/synapse/SKILL.md) when you want a handoff. Comments do
 not prescribe whether the response should be discussion or code changes.
+
+For example, map thread viewing in normal and visual mode:
+
+```lua
+vim.keymap.set({ 'n', 'x' }, '<leader>st', ':SynapseThread<CR>', { desc = 'View Synapse thread' })
+```
 
 ## Anchors and display
 
@@ -128,7 +156,7 @@ comments and threads are detached copies.
 | `saved_sessions()` | `{session_id, project_root, comment_count}` entries |
 | `resume(id, {confirm?}?)` | Session info after independently copying the snapshot |
 | `compose({file?, line?, end_line?, parent_id?, id?}?)` | `{bufnr, winid}`; `id` edits, `parent_id` replies, otherwise new comment |
-| `view(comment_id)` | `{bufnr, winid}` for the read-only whole thread |
+| `view(comment_id_or_opts?)` | Selected-comment detail `{bufnr, winid}` in a read-only outline/detail view; omit for cursor, or pass `{line, end_line?}` for a current-buffer range. Returns `nil` for no match or an asynchronous picker |
 | `browse(author?)` | Quickfix entries; opens the browser |
 | `refresh()` | Repaint native markers from recorded coordinates |
 

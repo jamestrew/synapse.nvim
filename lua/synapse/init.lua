@@ -44,10 +44,10 @@ function M.compose(opts)
   return ui().compose(opts)
 end
 
----@param id string
----@return synapse.Window
-function M.view(id)
-  return ui().view(id)
+---@param target? string|synapse.ViewOpts
+---@return synapse.Window?
+function M.view(target)
+  return ui().view(target)
 end
 
 ---@return synapse.Info
