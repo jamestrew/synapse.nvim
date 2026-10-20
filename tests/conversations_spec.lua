@@ -176,6 +176,57 @@ t.describe('code-anchored conversations', function()
     end
   )
 
+  t.it('resumes the latest valid project snapshot by default and still accepts an ID', function()
+    n.exec_lua(function(root)
+      local s = require('synapse')
+      local storage = require('synapse.storage')
+      local function snapshot(digit, body, modified, project_root)
+        local id = digit:rep(24)
+        local path = root .. '/saved/' .. id .. '.json'
+        storage.write(path, {
+          version = 1,
+          session_id = id,
+          project_root = project_root or root,
+          next_id = 2,
+          comments = {
+            {
+              id = 'c1',
+              author = 'human',
+              body = body,
+              anchor = { file = 'code.lua', line = 1, end_line = 1 },
+            },
+          },
+        })
+        assert(vim.uv.fs_utime(path, modified, modified))
+        return id
+      end
+      local older = snapshot('2', 'older', 200.25)
+      snapshot('1', 'latest', 200.75)
+      snapshot('3', 'other project', 300, root .. '/other')
+      snapshot('4', ' ', 400)
+      vim.cmd.SynapseResume()
+      assert(s.threads()[1].comments[1].body == 'latest')
+      assert(s.info().session_id ~= ('1'):rep(24))
+      local ok, err = pcall(vim.cmd.SynapseResume)
+      assert(not ok and tostring(err):find('requires confirm=true'))
+      s.clear({ confirm = true, include_human = true })
+      vim.cmd.SynapseResume(older)
+      assert(s.threads()[1].comments[1].body == 'older')
+      assert(s.resume(nil, { confirm = true }).generation == 3)
+    end, project)
+  end)
+
+  t.it('reports when there is no snapshot to resume without changing the session', function()
+    n.exec_lua(function()
+      local s = require('synapse')
+      local before = s.info()
+      local ok, err = pcall(vim.cmd.SynapseResume)
+      assert(not ok and tostring(err):find('no saved sessions for this project'))
+      assert(vim.deep_equal(before, s.info()))
+      assert(#s.threads() == 0)
+    end)
+  end)
+
   t.it(
     'surfaces a failed save without changing accepted or previously saved conversations',
     function()

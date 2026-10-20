@@ -416,7 +416,7 @@ function M.saved_sessions()
 end
 
 ---Resume a snapshot as an independent copy, never as a second writer to its identity.
----@param id string
+---@param id? string Defaults to the project's most recently saved snapshot.
 ---@param opts? synapse.ResumeOpts
 ---@return synapse.Info
 function M.resume(id, opts)
@@ -425,6 +425,25 @@ function M.resume(id, opts)
     #s.comments == 0 or (opts and opts.confirm == true),
     'synapse: resuming over comments requires confirm=true'
   )
+  if id == nil then
+    ---@type string?
+    local latest_id
+    local latest_sec, latest_nsec = -math.huge, 0
+    for _, saved in ipairs(M.saved_sessions()) do
+      local stat = vim.uv.fs_stat(saved_path(saved.session_id))
+      if
+        stat
+        and (
+          stat.mtime.sec > latest_sec
+          or (stat.mtime.sec == latest_sec and stat.mtime.nsec > latest_nsec)
+        )
+      then
+        latest_id = saved.session_id
+        latest_sec, latest_nsec = stat.mtime.sec, stat.mtime.nsec
+      end
+    end
+    id = assert(latest_id, 'synapse: no saved sessions for this project')
+  end
   local saved = validate_saved(storage.read(saved_path(id)), id)
   saved.session_id = s.session_id
   commit(saved, true)

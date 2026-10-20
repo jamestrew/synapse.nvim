@@ -126,9 +126,11 @@ Nothing is automatically restored, committed, or synchronized. Use:
 local s = require('synapse')
 vim.print(s.saved_sessions()) -- valid snapshots for this project, with comment_count
 s.resume('24-character-session-id')
+s.resume() -- most recently saved valid snapshot for this project
 ```
 
-`:SynapseResume {session-id}` supports saved-ID completion. Resumption **copies**
+`:SynapseResume [session-id]` defaults to this project's most recently modified
+valid snapshot; an explicit ID supports saved-ID completion. Resumption **copies**
 the chosen snapshot into this instance's independent identity, even if the source
 session is still live. It never takes over or writes the source session's file.
 Replacing nonempty conversations requires the explicit Lua option
@@ -154,7 +156,7 @@ comments and threads are detached copies.
 | `clear({confirm=true, include_human?})` | Number removed; defaults to agent-only |
 | `threads(author?)` | Threads in creation order; optional `human`/`agent` filter |
 | `saved_sessions()` | `{session_id, project_root, comment_count}` entries |
-| `resume(id, {confirm?}?)` | Session info after independently copying the snapshot |
+| `resume(id?, {confirm?}?)` | Session info after independently copying the snapshot; defaults to the latest for this project |
 | `compose({file?, line?, end_line?, parent_id?, id?}?)` | `{bufnr, winid}`; `id` edits, `parent_id` replies, otherwise new comment |
 | `view(comment_id_or_opts?)` | Selected-comment detail `{bufnr, winid}` in a read-only outline/detail view; omit for cursor, or pass `{line, end_line?}` for a current-buffer range. Returns `nil` for no match or an asynchronous picker |
 | `browse(author?)` | Quickfix entries; opens the browser |
