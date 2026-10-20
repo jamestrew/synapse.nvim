@@ -25,9 +25,9 @@ vim.api.nvim_create_user_command('SynapseClear', function(args)
 end, { bang = true })
 
 vim.api.nvim_create_user_command('SynapseResume', function(args)
-  require('synapse').resume(args.args)
+  require('synapse').resume(args.args ~= '' and args.args or nil)
 end, {
-  nargs = 1,
+  nargs = '?',
   complete = function()
     return vim.tbl_map(function(saved)
       return saved.session_id

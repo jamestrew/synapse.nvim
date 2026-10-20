@@ -85,7 +85,7 @@ function M.saved_sessions()
   return require('synapse.session').saved_sessions()
 end
 
----@param id string
+---@param id? string Defaults to the project's most recently saved snapshot.
 ---@param opts? synapse.ResumeOpts
 ---@return synapse.Info
 function M.resume(id, opts)
