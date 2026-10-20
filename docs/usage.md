@@ -170,6 +170,13 @@ root comments. Bodies must contain non-whitespace text. No agent operation can
 edit human text or choose human authorship. Agents can delete either author's
 comments subject to the same integrity checks.
 
-The agent interface is documented in the skill. It uses trusted local Neovim RPC,
+The agent interface is documented in the [skill](../skills/synapse/SKILL.md).
+Its bundled `scripts/request.lua` runs with `nvim --headless -u NONE -i NONE -l`,
+without loading user configuration or a local copy of the plugin. The skill
+directory can be installed separately; clients only need the discovery location
+and project root, plus a session ID when selection is ambiguous. Operations
+execute inside the running editor.
+
+It uses trusted local Neovim RPC,
 not an authorization sandbox. Neither skill conventions nor operation names limit
 what an agent with arbitrary shell/Neovim access could otherwise execute.

@@ -5,7 +5,7 @@
   },
   "workspace": {
     "ignoreDir": [".deps"],
-    "workspaceRoots": ["lua", "plugin", "tests"],
+    "workspaceRoots": ["lua", "plugin", "tests", "skills"],
     "library": [".deps/neovim/runtime/lua"],
     "packages": [
       {

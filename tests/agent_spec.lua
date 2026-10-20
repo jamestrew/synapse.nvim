@@ -25,21 +25,26 @@ local function server(client, root)
   )
 end
 
-local function request_process(request, timeout)
-  local script = project .. '/request.lua'
-  vim.fn.writefile({
-    'vim.opt.rtp:prepend(assert(vim.env.SYNAPSE_PLUGIN))',
-    "local agent = require('synapse.agent')",
-    'local request = vim.json.decode(assert(vim.env.SYNAPSE_REQUEST))',
-    'local result = request.op and agent.request(request) or agent.discover(request)',
-    "io.write(vim.json.encode(result), '\\n')",
-  }, script)
-  local result = vim
-    .system({ vim.env.NVIM_PRG, '--headless', '-u', 'NONE', '-i', 'NONE', '-l', script }, {
+local function request_result(request, timeout)
+  return vim
+    .system({
+      vim.env.NVIM_PRG,
+      '--headless',
+      '-u',
+      'NONE',
+      '-i',
+      'NONE',
+      '-l',
+      project .. '/skill/scripts/request.lua',
+    }, {
       timeout = timeout or 5000,
-      env = { SYNAPSE_PLUGIN = vim.env.SYNAPSE_ROOT, SYNAPSE_REQUEST = vim.json.encode(request) },
+      env = { SYNAPSE_REQUEST = vim.json.encode(request) },
     })
     :wait()
+end
+
+local function request_process(request, timeout)
+  local result = request_result(request, timeout)
   t.eq(0, result.code, result.stderr)
   return vim.json.decode(assert(result.stdout))
 end
@@ -47,7 +52,11 @@ end
 t.describe('documented agent RPC interface', function()
   t.before_each(function()
     project = vim.fn.tempname()
-    vim.fn.mkdir(project, 'p')
+    vim.fn.mkdir(project .. '/skill/scripts', 'p')
+    vim.fn.writefile(
+      vim.fn.readfile(vim.env.SYNAPSE_ROOT .. '/skills/synapse/scripts/request.lua'),
+      project .. '/skill/scripts/request.lua'
+    )
     vim.fn.writefile({ 'code', 'more' }, project .. '/code.lua')
     n.clear()
   end)
@@ -71,18 +80,22 @@ t.describe('documented agent RPC interface', function()
           socket = project .. '/absent',
         }),
       }, project .. '/live/stale.json')
-      t.eq(
-        { 'agent', 2, 'over RPC' },
-        n.exec_lua(function(root)
-          local result = require('synapse.agent').request({
-            project_root = root,
-            discovery_dir = root .. '/live',
-            op = 'comment',
-            args = { file = 'code.lua', line = 2, body = 'over RPC' },
-          })
-          return { result.author, result.anchor.line, result.body }
-        end, project)
-      )
+      -- A reachable socket with the wrong advertised identity is also ineligible.
+      vim.fn.writefile({
+        vim.json.encode({
+          project_root = project,
+          session_id = 'mismatched',
+          socket = live.socket,
+        }),
+      }, project .. '/live/mismatched.json')
+      vim.fn.writefile({ 'not JSON' }, project .. '/live/malformed.json')
+      local result = request_process({
+        project_root = project,
+        discovery_dir = project .. '/live',
+        op = 'comment',
+        args = { file = 'code.lua', line = 2, body = 'over RPC' },
+      })
+      t.eq({ 'agent', 2, 'over RPC' }, { result.author, result.anchor.line, result.body })
       t.eq(1, #rpc(clients[1], [[return require('synapse').threads()]]))
       local ad = vim.json.decode(
         table.concat(vim.fn.readfile(project .. '/live/' .. live.session_id .. '.json'), '\n')
@@ -104,28 +117,21 @@ t.describe('documented agent RPC interface', function()
       local other = server(child(), elsewhere)
       rpc(clients[1], [[vim.cmd.cd(...)]], elsewhere)
       t.eq(project, rpc(clients[1], [[return require('synapse').info().project_root]]))
-      t.eq(
-        'ambiguous',
-        n.exec_lua(function(root)
-          local ok, err = pcall(require('synapse.agent').request, {
-            project_root = root,
-            discovery_dir = root .. '/live',
-            op = 'comment',
-            args = { file = 'code.lua', line = 1, body = 'must not publish' },
-          })
-          assert(not ok and err:find('ambiguous'))
-          return 'ambiguous'
-        end, project)
-      )
-      n.exec_lua(function(root, id)
-        require('synapse.agent').request({
-          project_root = root,
-          discovery_dir = root .. '/live',
-          session_id = id,
-          op = 'comment',
-          args = { file = 'code.lua', line = 1, body = 'only first' },
-        })
-      end, project, first.session_id)
+      local rejected = request_result({
+        project_root = project,
+        discovery_dir = project .. '/live',
+        op = 'comment',
+        args = { file = 'code.lua', line = 1, body = 'must not publish' },
+      })
+      t.neq(0, rejected.code)
+      t.matches('ambiguous', assert(rejected.stderr))
+      request_process({
+        project_root = project,
+        discovery_dir = project .. '/live',
+        session_id = first.session_id,
+        op = 'comment',
+        args = { file = 'code.lua', line = 1, body = 'only first' },
+      })
       t.eq({ 1, 0, 0 }, {
         #rpc(clients[1], [[return require('synapse').threads()]]),
         #rpc(clients[2], [[return require('synapse').threads()]]),
@@ -209,34 +215,52 @@ t.describe('documented agent RPC interface', function()
     ]],
       project
     )
-    t.eq(
-      info.session_id,
-      n.exec_lua(function(root)
-        vim.env.XDG_RUNTIME_DIR = nil
-        local live = require('synapse.agent').discover({ project_root = root })
-        assert(#live == 1, 'expected one discoverable session')
-        return live[1].session_id
-      end, project)
-    )
+    local live = request_process({ project_root = project })
+    t.eq(1, #live)
+    t.eq(info.session_id, live[1].session_id)
     client:request('nvim_command', 'qa!')
   end)
+  t.it('runs a copied skill client without the plugin on its runtime path or any setup', function()
+    server(child(), project)
+    local c = request_process({
+      project_root = project,
+      discovery_dir = project .. '/live',
+      op = 'comment',
+      args = { file = 'code.lua', line = 1, body = 'from the skill' },
+    })
+    t.eq('agent', c.author)
+    local threads = request_process({
+      project_root = project,
+      discovery_dir = project .. '/live',
+      op = 'threads',
+    })
+    t.eq('from the skill', threads[1].comments[1].body)
+    request_process({
+      project_root = project,
+      discovery_dir = project .. '/live',
+      op = 'comment',
+      args = { parent_id = c.id, body = 'a reply' },
+    })
+    local replied = request_process({
+      project_root = project,
+      discovery_dir = project .. '/live',
+      op = 'threads',
+    })
+    t.eq('a reply', replied[1].comments[2].body)
+  end)
   t.it(
-    'runs the documented short-lived Neovim client without another executable or setup',
+    'returns no candidates for a missing directory and rejects a write without a live session',
     function()
-      server(child(), project)
-      local c = request_process({
-        project_root = project,
-        discovery_dir = project .. '/live',
-        op = 'comment',
-        args = { file = 'code.lua', line = 1, body = 'from the skill' },
-      })
-      t.eq('agent', c.author)
-      t.eq(
-        'from the skill',
-        rpc(clients[1], [[return require('synapse').threads()[1].comments[1].body]])
-      )
+      local opts = { project_root = project, discovery_dir = project .. '/absent' }
+      t.eq({}, request_process(opts))
+      opts.op = 'comment'
+      opts.args = { file = 'code.lua', line = 1, body = 'must not publish' }
+      local rejected = request_result(opts)
+      t.neq(0, rejected.code)
+      t.matches('no matching live session', assert(rejected.stderr))
     end
   )
+
   t.it(
     'targets a healthy session when a peer is paused and bounds automatic liveness probes',
     function()

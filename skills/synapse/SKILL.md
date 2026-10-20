@@ -11,29 +11,25 @@ not decide whether feedback calls for discussion, edits, or another action.
 
 ## Connect and select
 
-Use the installed `nvim` executable as a short-lived RPC client. No daemon,
-additional executable, or offline saved-state writer is needed. Locate the
-installed `synapse.nvim` directory and the target project's canonical root first
-(Git worktree root when applicable). Use the same `NVIM_APPNAME` and XDG environment
-as the running editor, or obtain its configured discovery directory from the user.
+Use the installed `nvim` executable as a short-lived RPC client. Locate the target
+project's canonical root first (Git worktree root when applicable). Use the same
+`NVIM_APPNAME` and XDG environment as the running editor, or obtain its configured
+discovery directory from the user.
 
-Write this temporary Lua request script, e.g. `/tmp/synapse-request.lua`:
+Run the bundled [request script](scripts/request.lua). Resolve its path relative
+to this `SKILL.md`, wherever the skill is installed; the skill directory can be
+copied independently of the plugin. No plugin installation path, temporary
+script, daemon, or additional executable is needed.
 
-```lua
-vim.opt.rtp:prepend(assert(vim.env.SYNAPSE_PLUGIN))
-local agent = require('synapse.agent')
-local request = vim.json.decode(assert(vim.env.SYNAPSE_REQUEST))
-local result = request.op and agent.request(request) or agent.discover(request)
-io.write(vim.json.encode(result), '\n')
-```
-
-Discover live sessions (substitute the two absolute paths):
+Discover live sessions (substitute the absolute project and skill-directory paths):
 
 ```sh
-SYNAPSE_PLUGIN=/absolute/path/to/synapse.nvim \
 SYNAPSE_REQUEST='{"project_root":"/absolute/project"}' \
-nvim --headless -u NONE -i NONE -l /tmp/synapse-request.lua
+nvim --headless -u NONE -i NONE -l /absolute/skill-dir/scripts/request.lua
 ```
+
+Keep `-u NONE -i NONE`: the client loads neither user configuration nor the plugin
+and does not call `setup()`. Synapse operations execute in the running editor.
 
 Discovery probes one small advertisement per editor in
 `stdpath('state') .. '/synapse/live/*.json'`. Each advertises `project_root`,
@@ -41,9 +37,8 @@ Discovery probes one small advertisement per editor in
 ineligible. Liveness probes use the same Neovim executable with a 1,000 ms timeout
 per candidate; set `timeout_ms` in the request for slow or busy editors. Explicit
 Session IDs are filtered before connecting. Add `"discovery_dir":"/configured/path"` when overridden by the user.
-The client does **not** call `setup()`.
 
-A sole matching live session is automatically selected by `request()`. With
+A sole matching live session is automatically selected for operations. With
 multiple matches, obtain the intended **session_id** and include it in every
 request; mutations are never broadcast. If none are live, ask the human to open
 Neovim and initialize Synapse. Do not mutate saved JSON files.
